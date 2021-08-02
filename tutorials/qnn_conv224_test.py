@@ -45,12 +45,12 @@ import tvm.testing
 # Let's create a very simple network for demonstration.
 # It consists of convolution, batch normalization, and ReLU activation.
 
-out_channels = 4
+out_channels = 64
 batch_size = 1
 
-data = relay.var("data", relay.TensorType((batch_size, 4, 5, 5), dtype="float32"))
-weight = relay.var("weight", relay.TensorType((4, 4, 3, 3), dtype="int8"))
-bias = relay.var("bias", relay.TensorType((4,), dtype="int32"))
+data = relay.var("data", relay.TensorType((batch_size, 3, 224, 224), dtype="float32"))
+weight = relay.var("weight", relay.TensorType((64, 3, 3, 3), dtype="int8"))
+bias = relay.var("bias", relay.TensorType((64,), dtype="int32"))
 
 # data_scale = relay.var("data_scale", shape=(), dtype="float32")
 data_scale = relay.const(np.array(4).astype("float32"))
@@ -63,32 +63,33 @@ data_scale = relay.const(np.array(4).astype("float32"))
 
 
 simple_net = relay.qnn.op.quantize(data, data_scale, relay.const(0, "int32"))
-simple_net = relay.qnn.op.conv2d(simple_net,
-                                 weight,
-                                 input_zero_point=relay.const(0, "int32"),
-                                 kernel_zero_point=relay.const(0, "int32"),
-                                 input_scale=relay.const(4.0, "float32"),
-                                 kernel_scale=relay.const(1.0, "float32"),
-                                 kernel_size=(3, 3),
-                                 channels=64,
-                                 padding=(0, 0),
-                                 strides=(1, 1),
-                                 dilation=(1, 1),
-                                 data_layout="NCHW",
-                                 kernel_layout="OIHW",
-                                 out_dtype="int32",
-                                 )
-# simple_net = relay.nn.conv2d(
-#     data=simple_net, weight=weight, kernel_size=(3, 3), channels=out_channels, padding=(0, 0), data_layout="NCHW", kernel_layout="OIHW",out_dtype="int32"
-# )
+# simple_net = relay.qnn.op.conv2d(simple_net,
+#                                  weight,
+#                                  input_zero_point=relay.const(0, "int32"),
+#                                  kernel_zero_point=relay.const(0, "int32"),
+#                                  input_scale=relay.const(4.0, "float32"),
+#                                  kernel_scale=relay.const(1.0, "float32"),
+#                                  kernel_size=(3, 3),
+#                                  channels=64,
+#                                  padding=(0, 0),
+#                                  strides=(1, 1),
+#                                  dilation=(1, 1),
+#                                  data_layout="NCHW",
+#                                  kernel_layout="OIHW",
+#                                  out_dtype="int32",
+#                                  )
+simple_net = relay.nn.conv2d(
+    data=simple_net, weight=weight, kernel_size=(3, 3), channels=out_channels, padding=(0, 0), data_layout="NCHW", kernel_layout="OIHW",out_dtype="int32"
+)
 
 simple_net = relay.nn.bias_add(simple_net, bias, axis=1)
+
 simple_net = relay.qnn.op.dequantize(
         simple_net,
         input_scale=relay.const(0.008, "float32"),
         input_zero_point=relay.const(0, "int32")
         )
-
+simple_net = relay.op.clip(simple_net, -128, 127)
 # simple_net = relay.nn.conv2d(
 #     data=simple_net, weight=weight, kernel_size=(3, 3), channels=out_channels, padding=(0, 0), data_layout="NCHW", kernel_layout="OIHW"
 # )
@@ -104,10 +105,10 @@ print(mod)
 mod = relay.transform.InferType()(mod)
 print(mod)
 
-weight_data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/kernel.txt",delimiter=",",skiprows=1,dtype="int8").reshape(64,3,3,3)
+weight_data = np.loadtxt("/home/jemin/development/dataset/kernel.txt",delimiter=",",skiprows=1,dtype="int8").reshape(64,3,3,3)
 weight_data = weight_data.transpose(0,3,1,2)
 
-bias_data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/bias.txt",delimiter=",",skiprows=1, dtype="int32")
+bias_data = np.loadtxt("/home/jemin/development/dataset/bias.txt",delimiter=",",skiprows=1, dtype="int32")
 scale = np.array(4).astype("float32")
 zp = np.array(0).astype("int32")
 params = {}
@@ -137,7 +138,7 @@ with tvm.transform.PassContext(opt_level=3):
     lib = relay.build(mod, target, params=params)
     #lib = relay.build(mod, target)
 #data = np.random.uniform(-1, 1, size=data_shape).astype("float32")
-data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/input.txt",delimiter=",",skiprows=1,dtype="float32").reshape(1,3,224,224)
+data = np.loadtxt("/home/jemin/development/dataset/input.txt",delimiter=",",skiprows=1,dtype="float32").reshape(1,3,224,224)
 
 module = tvm.contrib.graph_executor.GraphModule(lib["default"](tvm.device("llvm", 0)))
 module.set_input("data", data)
@@ -154,7 +155,7 @@ print(out_cuda.shape)
 print(np.sum(out_cuda))
 print(out_cuda[0,0,0:-1,0])
 print("golden")
-golden = np.loadtxt("/home/jemin/development/dataset/qnn_quant/result.txt",delimiter=",",skiprows=1,dtype="int8").reshape(1,64,222,222)
+golden = np.loadtxt("/home/jemin/development/dataset/result.txt",delimiter=",",skiprows=1,dtype="int8").reshape(1,64,222,222)
 #golden = golden.transpose(0,3,1,2)
 print(golden.shape)
 print(np.sum(golden))

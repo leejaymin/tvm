@@ -48,9 +48,9 @@ import tvm.testing
 out_channels = 4
 batch_size = 1
 
-data = relay.var("data", relay.TensorType((batch_size, 4, 5, 5), dtype="float32"))
-weight = relay.var("weight", relay.TensorType((4, 4, 3, 3), dtype="float32"))
-bias = relay.var("bias", relay.TensorType((4,), dtype="float32"))
+data = relay.var("data", relay.TensorType((batch_size, 4, 5, 5), dtype="int8"))
+weight = relay.var("weight", relay.TensorType((4, 4, 3, 3), dtype="int8"))
+bias = relay.var("bias", relay.TensorType((4,), dtype="int32"))
 
 # data_scale = relay.var("data_scale", shape=(), dtype="float32")
 data_scale = relay.const(np.array(0.2).astype("float32"))
@@ -64,12 +64,12 @@ bias_scale = relay.const(np.array(0.06).astype("float32"))
 # bias_zp = relay.var("bias_zp", shape=(), dtype="int32")
 
 
-quant_data = relay.qnn.op.quantize(data, data_scale, relay.const(0, "int32"))
-quant_weight = relay.qnn.op.quantize(weight, weight_scale, relay.const(0, "int32"))
-quant_bias = relay.qnn.op.quantize(bias, bias_scale, relay.const(0, "int32"),out_dtype="int32")
+# quant_data = relay.qnn.op.quantize(data, data_scale, relay.const(0, "int32"))
+# quant_weight = relay.qnn.op.quantize(weight, weight_scale, relay.const(0, "int32"))
+# quant_bias = relay.qnn.op.quantize(bias, bias_scale, relay.const(0, "int32"),out_dtype="int32")
 
-simple_net = relay.qnn.op.conv2d(quant_data,
-                                 quant_weight,
+simple_net = relay.qnn.op.conv2d(data,
+                                 weight,
                                  input_zero_point=relay.const(0, "int32"),
                                  kernel_zero_point=relay.const(0, "int32"),
                                  input_scale=relay.const(0.2, "float32"),
@@ -87,7 +87,9 @@ simple_net = relay.qnn.op.conv2d(quant_data,
 #     data=quant_data, weight=quant_weight, kernel_size=(3, 3), channels=out_channels, padding=(1, 1), data_layout="NCHW", kernel_layout="OIHW",out_dtype="int32"
 # )
 
-simple_net = relay.nn.bias_add(simple_net, quant_bias, axis=1)
+simple_net = relay.nn.bias_add(simple_net, bias, axis=1)
+simple_net = relay.op.clip(simple_net, -128, 127)
+
 # simple_net = relay.qnn.op.dequantize(
 #         simple_net,
 #         input_scale=relay.const(0.008, "float32"),
@@ -115,10 +117,10 @@ print(mod)
 mod = relay.transform.InferType()(mod)
 print(mod)
 
-weight_data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/kernel.txt",delimiter=",",skiprows=1,dtype="float32").reshape(4,3,3,4)
+weight_data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/kernel.txt",delimiter=",",skiprows=1,dtype="int8").reshape(4,3,3,4)
 weight_data = weight_data.transpose(0,3,1,2)
 
-bias_data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/bias.txt",delimiter=",",skiprows=1, dtype="float32")
+bias_data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/bias.txt",delimiter=",",skiprows=1, dtype="int32")
 scale = np.array(4).astype("float32")
 zp = np.array(0).astype("int32")
 params = {}
@@ -148,7 +150,7 @@ with tvm.transform.PassContext(opt_level=3):
     lib = relay.build(mod, target, params=params)
     #lib = relay.build(mod, target)
 #data = np.random.uniform(-1, 1, size=data_shape).astype("float32")
-data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/input.txt",delimiter=",",skiprows=1,dtype="float32").reshape(1,5,5,4)
+data = np.loadtxt("/home/jemin/development/dataset/qnn_quant/input.txt",delimiter=",",skiprows=1,dtype="int8").reshape(1,5,5,4)
 data = data.transpose(0,3,1,2)
 
 
@@ -165,13 +167,13 @@ out_cuda = module.get_output(0).numpy()
 print("inference result:")
 print(out_cuda.shape)
 print(np.sum(out_cuda))
-print(out_cuda)
-# print(out_cuda[0,0,0:-1,0])
+#print(out_cuda)
+print(out_cuda[0,:,:,0])
 
 print("golden")
 golden = np.loadtxt("/home/jemin/development/dataset/qnn_quant/result.txt",delimiter=",",skiprows=1,dtype="int8").reshape(1,5,5,4)
 golden = golden.transpose(0,3,1,2)
 print(golden.shape)
 print(np.sum(golden))
-print(golden)
-# print(golden[0,0,0:-1,0])
+#print(golden)
+print(golden[0,:,:,0])
