@@ -37,15 +37,23 @@ def quantize_test_driver(in_dtype, quant_args, axis, out_dtype, in_data, verify_
     )
     mod = relay.Function(relay.analysis.free_vars(quantized_output), quantized_output)
     mod = tvm.IRModule.from_expr(mod)
+    # with tvm.transform.PassContext(opt_level=3):
+    #     graph, lib, params = relay.build(mod, "llvm", params=None)
+    #     rt_mod = graph_executor.create(graph, lib, device=tvm.cpu(0))
     with tvm.transform.PassContext(opt_level=3):
-        graph, lib, params = relay.build(mod, "llvm", params=None)
-        rt_mod = graph_executor.create(graph, lib, device=tvm.cpu(0))
+        lib = relay.build(mod, target="llvm", params=None)
+        rt_mod = tvm.contrib.graph_executor.GraphModule(lib["default"](tvm.device("llvm", 0)))
         rt_mod.set_input(input_data=in_data)
-        rt_mod.set_input(**params)
+        #rt_mod.set_input(**params)
         rt_mod.run()
         res = rt_mod.get_output(0).numpy()
         np.testing.assert_equal(res, verify_output_data)
         assert res.dtype == out_dtype
+
+
+
+
+
 
 
 def test_float32_to_uint8():

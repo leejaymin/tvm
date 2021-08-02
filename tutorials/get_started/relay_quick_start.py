@@ -71,7 +71,7 @@ mod, params = relay.testing.resnet.get_workload(
 )
 
 # set show_meta_data=True if you want to show meta data
-print(mod.astext(show_meta_data=False))
+print(mod.astext(show_meta_data=True))
 
 ######################################################################
 # Compilation
