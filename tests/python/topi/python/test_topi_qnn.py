@@ -57,14 +57,14 @@ def verify_simulated_quantize(data_shape, out_dtype, channels, axis):
         real_q_op = relay.qnn.op.quantize(a_var, s_var, z_var, axis=axis, out_dtype=out_dtype)
         with tvm.transform.PassContext(opt_level=3):
             lib = relay.build(tvm.IRModule.from_expr(real_q_op), target=target)
-
+        print(lib)
         # Get real qnn quantize output.
         m = graph_executor.GraphModule(lib["default"](dev))
         m.set_input("a", a_np)
 
         m.run()
         real_q_out = m.get_output(0)
-
+        print(real_q_out)
         # Compile the simulated quantize function.
         with tvm.target.Target(target):
             sched = tvm.topi.testing.get_injective_schedule(target)(SIM_Q)
@@ -77,7 +77,9 @@ def verify_simulated_quantize(data_shape, out_dtype, channels, axis):
         assert np.sum(mismatch) <= 3
 
     for target, dev in tvm.testing.enabled_targets():
+        #target, dev = tvm.testing.enabled_targets()[0]
         check_target(target, dev)
+
 
 
 def test_simulated_quantize():
@@ -142,8 +144,8 @@ def verify_simulated_dequantize(data_shape, in_dtype, channels, axis):
         tvm.testing.assert_allclose(dq.numpy(), real_dq_out.numpy().astype("float32"), rtol=1e-5)
 
     for target, dev in tvm.testing.enabled_targets():
+        #target, dev = tvm.testing.enabled_targets()[0]
         check_target(target, dev)
-
 
 def test_simulated_dequantize():
     verify_simulated_dequantize([1], "int8", [1], -1)

@@ -164,7 +164,7 @@ with torch.no_grad():
 input_name = "input"  # the input name can be be arbitrary for PyTorch frontend.
 input_shapes = [(input_name, (1, 3, 224, 224))]
 mod, params = relay.frontend.from_pytorch(script_module, input_shapes)
-# print(mod) # comment in to see the QNN IR dump
+print(mod) # comment in to see the QNN IR dump
 
 ##############################################################################
 # Compile and run the Relay module
@@ -176,7 +176,6 @@ mod, params = relay.frontend.from_pytorch(script_module, input_shapes)
 # Under the hood, quantization specific operators are lowered to a sequence of
 # standard Relay operators before compilation.
 tvm_result, rt_mod = run_tvm_model(mod, params, input_name, inp, target="llvm")
-
 ##########################################################################
 # Compare the output labels
 # -------------------------

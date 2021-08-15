@@ -28,6 +28,7 @@ Relay, quantize the Relay model and then perform the inference.
 """
 
 import tvm
+import onnx
 from tvm import te
 from tvm import relay
 import mxnet as mx
@@ -106,6 +107,14 @@ def get_model():
     mod, params = relay.frontend.from_mxnet(gluon_model, {"data": data_shape})
     return mod, params
 
+def get_onnx_model():
+    onnx_model = onnx.load("/home/jemin/development/dataset/quant_test.onnx")
+    #onnx_model = onnx.load("/home/jemin/development/dataset/conv.onnx")
+    #onnx_model = onnx.load("/home/jemin/hdd/models/mxnet_exported_resnet18.onnx")
+    data_shape = (1, 3, 224, 224)
+    mod, params = relay.frontend.from_onnx(onnx_model, {"input.1": data_shape})
+    #mod, params = relay.frontend.from_onnx(onnx_model, {"data": data_shape})
+    return mod, params
 
 ###############################################################################
 # Quantize the Model
@@ -136,7 +145,8 @@ def quantize(mod, params, data_aware):
         with relay.quantize.qconfig(calibrate_mode="kl_divergence", weight_scale="max"):
             mod = relay.quantize.quantize(mod, params, dataset=calibrate_dataset())
     else:
-        with relay.quantize.qconfig(calibrate_mode="global_scale", global_scale=8.0):
+        with relay.quantize.qconfig(calibrate_mode="global_scale", weight_scale="power2", global_scale=8.0):
+            print("global_scale")
             mod = relay.quantize.quantize(mod, params)
     return mod
 
@@ -146,20 +156,27 @@ def quantize(mod, params, data_aware):
 # -------------
 # We create a Relay VM to build and execute the model.
 def run_inference(mod):
-    executor = relay.create_executor("vm", mod, dev, target)
+    executor = relay.create_executor("graph", mod, dev, target)
     val_data, batch_fn = get_val_data()
     for i, batch in enumerate(val_data):
         data, label = batch_fn(batch)
+        #data = data.transpose(0,2,3,1)
         prediction = executor.evaluate()(data)
-        if i > 10:  # only run inference on a few samples in this tutorial
+        if i > 1:  # only run inference on a few samples in this tutorial
+            print(prediction)
             break
 
 
 def main():
-    mod, params = get_model()
-    mod = quantize(mod, params, data_aware=True)
+    mod, params = get_onnx_model()
+    print("print FP32 model")
+    print(mod)
     run_inference(mod)
 
+    mod2 = quantize(mod, params, data_aware=False) # global scale
+    print("print INT8 model")
+    print(mod2)
+    run_inference(mod2)
 
 if __name__ == "__main__":
     main()
