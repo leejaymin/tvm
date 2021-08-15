@@ -250,7 +250,7 @@ with open(synset_path) as f:
 # specify its instruction set. Set :code:`local_demo` to False if you want
 # to run this tutorial with a real device.
 
-local_demo = True
+local_demo = False
 
 # by default on CPU target will execute.
 # select 'cpu', 'opencl' and 'vulkan'
